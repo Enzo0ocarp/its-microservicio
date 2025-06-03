@@ -29,6 +29,10 @@ export class InvoicesController {
   update(@Payload() data: { id: string; dto: UpdateInvoiceDto }) {
     return this.service.update(data.id, data.dto);
   }
+  @MessagePattern('findInvoicesByUserId')
+findByUserId(@Payload() userId: string) {
+  return this.service.findByUserId(userId);
+}
 
   @MessagePattern('removeInvoice')
   remove(@Payload() id: string) {

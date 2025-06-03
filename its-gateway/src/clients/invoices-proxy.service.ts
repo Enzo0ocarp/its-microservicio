@@ -14,6 +14,9 @@ export class InvoicesProxyService {
   findAll() {
     return firstValueFrom(this.client.send('findAllInvoices', {}));
   }
+  findByUserId(userId: string) {
+  return firstValueFrom(this.client.send('findInvoicesByUserId', userId));
+}
   findOne(id: string) {
     return firstValueFrom(this.client.send('findOneInvoice', id));
   }
