@@ -1,27 +1,28 @@
+// its-gateway/src/dto/cart.dto.ts
 import { IsString, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AddToCartDto {
   @IsString()
-  productId: string;
+  productId!: string;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 }
 
 export class UpdateCartItemDto {
   @IsString()
-  productId: string;
+  productId!: string;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 }
 
 export class RemoveFromCartDto {
   @IsString()
-  productId: string;
+  productId!: string;
 }

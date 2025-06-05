@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { envs } from '../config/envs';
+import { GatewayClientsModule } from '../clients/clients.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { envs } from '../config/envs';
       secret: envs.jwt.secret,
       signOptions: { expiresIn: envs.jwt.expiresIn },
     }),
+    GatewayClientsModule, // Esta es la línea clave que faltaba
   ],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],
