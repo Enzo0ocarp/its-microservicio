@@ -104,7 +104,7 @@ import { Router } from '@angular/router';
             <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
               <div class="flex justify-between items-center">
                 <div class="text-sm text-gray-600">
-                  Total de {{ invoice.items.reduce((sum, item) => sum + item.quantity, 0) }} artículo(s)
+                  Total de {{ getInvoiceItemsCount(invoice) }} artículo(s)
                 </div>
                 <div class="flex space-x-3">
                   <button 
@@ -192,8 +192,12 @@ export class InvoiceListComponent implements OnInit {
 
   getTotalItemsCount(): number {
     return this.invoices.reduce((total, invoice) => 
-      total + invoice.items.reduce((sum: any, item: { quantity: any; }) => sum + item.quantity, 0), 0
+      total + this.getInvoiceItemsCount(invoice), 0
     );
+  }
+
+  getInvoiceItemsCount(invoice: any): number {
+    return invoice.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
   }
 
   getTotalAmount(): number {
