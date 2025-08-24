@@ -1,3 +1,4 @@
+// its-gateway/src/controllers/cart.controller.ts
 import {
   Controller,
   Get,
@@ -10,12 +11,26 @@ import {
   Request,
   BadRequestException,
 } from '@nestjs/common';
+import { 
+  ApiTags, 
+  ApiOperation, 
+  ApiResponse, 
+  ApiBearerAuth,
+  ApiBody
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersProxyService } from '../clients/users-proxy.service';
 import { ProductsProxyService } from '../clients/products-proxy.service';
 import { InvoicesProxyService } from '../clients/invoices-proxy.service';
-import { AddToCartDto, UpdateCartItemDto, RemoveFromCartDto } from '../dto/cart.dto';
+import { 
+  AddToCartDto, 
+  UpdateCartItemDto, 
+  RemoveFromCartDto,
+  CartResponseDto 
+} from '../dto/cart.dto';
 
+@ApiTags('Cart')
+@ApiBearerAuth('JWT-auth')
 @Controller('cart')
 export class CartController {
   constructor(
@@ -26,6 +41,47 @@ export class CartController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('add')
+  @ApiOperation({ 
+    summary: 'Agregar producto al carrito',
+    description: 'Agrega un producto al carrito del usuario con verificación de stock y creación de reserva'
+  })
+  @ApiBody({ type: AddToCartDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Producto agregado al carrito exitosamente',
+    schema: {
+      example: {
+        message: 'Product added to cart successfully',
+        cartItem: {
+          productId: "507f1f77bcf86cd799439011",
+          quantity: 2,
+          addedAt: "2024-06-22T20:30:00.000Z"
+        },
+        reservation: {
+          id: "507f1f77bcf86cd799439014",
+          productId: "507f1f77bcf86cd799439011",
+          userId: "507f1f77bcf86cd799439012",
+          quantity: 2,
+          expiresAt: "2024-06-22T21:30:00.000Z"
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Stock insuficiente o producto no encontrado',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Insufficient stock. Available: 10, Requested: 15',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'No autorizado - Token requerido'
+  })
   async addToCart(@Request() req, @Body() dto: AddToCartDto) {
     const userId = req.user.userId;
 
@@ -65,6 +121,19 @@ export class CartController {
 
   @UseGuards(AuthGuard('jwt'))
   @Get()
+  @ApiOperation({ 
+    summary: 'Obtener carrito',
+    description: 'Obtiene el carrito del usuario con información detallada de productos y precios calculados'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Carrito obtenido exitosamente',
+    type: CartResponseDto
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'No autorizado - Token requerido'
+  })
   async getCart(@Request() req) {
     const userId = req.user.userId;
     const cart = await this.usersProxy.getCart(userId);
@@ -104,6 +173,33 @@ export class CartController {
 
   @UseGuards(AuthGuard('jwt'))
   @Patch('item')
+  @ApiOperation({ 
+    summary: 'Actualizar cantidad de producto en carrito',
+    description: 'Actualiza la cantidad de un producto específico en el carrito'
+  })
+  @ApiBody({ type: UpdateCartItemDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Item del carrito actualizado exitosamente',
+    schema: {
+      example: {
+        message: 'Cart item updated successfully',
+        updatedItem: {
+          productId: "507f1f77bcf86cd799439011",
+          quantity: 5,
+          updatedAt: "2024-06-22T21:00:00.000Z"
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Stock insuficiente para la nueva cantidad'
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'No autorizado - Token requerido'
+  })
   async updateCartItem(@Request() req, @Body() dto: UpdateCartItemDto) {
     const userId = req.user.userId;
 
@@ -128,6 +224,36 @@ export class CartController {
 
   @UseGuards(AuthGuard('jwt'))
   @Delete('item')
+  @ApiOperation({ 
+    summary: 'Remover producto del carrito',
+    description: 'Remueve un producto específico del carrito y cancela su reserva'
+  })
+  @ApiBody({ type: RemoveFromCartDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Producto removido del carrito exitosamente',
+    schema: {
+      example: {
+        message: 'Product removed from cart successfully',
+        removedProduct: {
+          productId: "507f1f77bcf86cd799439011",
+          quantity: 2
+        },
+        cancelledReservation: {
+          id: "507f1f77bcf86cd799439014",
+          status: "cancelled"
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Producto no encontrado en el carrito'
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'No autorizado - Token requerido'
+  })
   async removeFromCart(@Request() req, @Body() dto: RemoveFromCartDto) {
     const userId = req.user.userId;
 
@@ -147,6 +273,25 @@ export class CartController {
 
   @UseGuards(AuthGuard('jwt'))
   @Delete('clear')
+  @ApiOperation({ 
+    summary: 'Vaciar carrito',
+    description: 'Remueve todos los productos del carrito y cancela todas las reservas'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Carrito vaciado exitosamente',
+    schema: {
+      example: {
+        message: 'Cart cleared successfully',
+        clearedItems: 5,
+        cancelledReservations: 5
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'No autorizado - Token requerido'
+  })
   async clearCart(@Request() req) {
     const userId = req.user.userId;
 
@@ -163,6 +308,50 @@ export class CartController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('checkout')
+  @ApiOperation({ 
+    summary: 'Procesar compra (Checkout)',
+    description: 'Finaliza la compra convirtiendo el carrito en una factura, confirma reservas y limpia el carrito'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Compra procesada exitosamente',
+    schema: {
+      example: {
+        message: 'Purchase completed successfully',
+        invoice: {
+          id: "507f1f77bcf86cd799439015",
+          userId: "507f1f77bcf86cd799439012",
+          items: [
+            {
+              productId: "507f1f77bcf86cd799439011",
+              productName: "Laptop Gaming",
+              quantity: 2,
+              price: 1200.99,
+              subtotal: 2401.98
+            }
+          ],
+          total: 2401.98,
+          status: "completed",
+          createdAt: "2024-06-22T20:30:00.000Z"
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Carrito vacío',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Cart is empty',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'No autorizado - Token requerido'
+  })
   async checkout(@Request() req) {
     const userId = req.user.userId;
 
