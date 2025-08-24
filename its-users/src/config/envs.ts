@@ -17,7 +17,7 @@ if (error) throw new Error(`Config validation error: ${error.message}`);
 export const envs = {
   port: value.PORT,
   dbUrl: value.DB_URL,
-  gateway: {                    // ← AGREGAR ESTO
+  gateway: {                    
     host: value.GATEWAY_HOST,
     port: value.GATEWAY_PORT,
   },
