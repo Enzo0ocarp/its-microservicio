@@ -9,7 +9,7 @@ async function bootstrap() {
     {
       transport: Transport.TCP,
       options: {
-        host: envs.gateway.host,
+        host: '0.0.0.0',  // CORREGIDO: Antes usabas envs.gateway.host
         port: envs.port,
       },
     },

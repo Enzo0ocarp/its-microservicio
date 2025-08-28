@@ -8,11 +8,29 @@ import { envs } from './config/envs';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
+  // Configuración CORS - AGREGADO PARA SOLUCIONAR EL PROBLEMA
+  app.enableCors({
+    origin: [
+      'http://localhost:3000',    // React dev server
+      'http://localhost:5173',    // Vite dev server
+      'http://localhost:4200',    // Angular dev server
+      'http://127.0.0.1:5500',    // Live Server
+      'http://localhost:8080',    // Otro puerto común
+      // Agrega aquí la URL de tu frontend en producción
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+  
   // Validación global de DTOs
   app.useGlobalPipes(new ValidationPipe({ 
     whitelist: true, 
     transform: true,
     forbidNonWhitelisted: true,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
   }));
 
   // Configuración de Swagger
@@ -84,8 +102,9 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(envs.port);
+  await app.listen(envs.port, '0.0.0.0'); // Agregado '0.0.0.0' para escuchar en todas las interfaces
   console.log(`🚀 Gateway listening on port ${envs.port}`);
   console.log(`📚 Swagger documentation available at http://localhost:${envs.port}/api/docs`);
+  console.log(`📡 CORS enabled for development origins`);
 }
 bootstrap();
