@@ -1,15 +1,16 @@
-// src/app/features/dashboard/dashboard.component.ts
+// src/app/features/auth/dashboard/dashboard.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ProductService } from '../../../core/services/product.service';
 import { InvoiceService } from '../../../core/services/invoice.service';
+import { AdminService } from '../../../core/services/admin.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div class="min-h-screen bg-gray-50">
       <!-- Header -->
@@ -18,7 +19,12 @@ import { InvoiceService } from '../../../core/services/invoice.service';
           <div class="flex justify-between items-center py-4">
             <div class="flex items-center">
               <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg mr-3"></div>
-              <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+              <h1 class="text-2xl font-bold text-gray-900">
+                {{ isAdmin ? 'Panel de Administración' : 'Dashboard' }}
+              </h1>
+              <span *ngIf="isAdmin" class="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
+                ADMIN
+              </span>
             </div>
             <div class="flex items-center space-x-4">
               <span class="text-gray-700">Hola, {{ currentUser?.username || 'Usuario' }}</span>
@@ -35,7 +41,7 @@ import { InvoiceService } from '../../../core/services/invoice.service';
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <div class="flex items-center">
               <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
@@ -44,7 +50,9 @@ import { InvoiceService } from '../../../core/services/invoice.service';
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-600">Total Productos</p>
+                <p class="text-sm font-medium text-gray-600">
+                  {{ isAdmin ? 'Total Productos' : 'Productos' }}
+                </p>
                 <p class="text-2xl font-bold text-gray-900">{{ stats.totalProducts }}</p>
               </div>
             </div>
@@ -58,8 +66,24 @@ import { InvoiceService } from '../../../core/services/invoice.service';
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-600">Mis Facturas</p>
+                <p class="text-sm font-medium text-gray-600">
+                  {{ isAdmin ? 'Total Facturas' : 'Mis Facturas' }}
+                </p>
                 <p class="text-2xl font-bold text-gray-900">{{ stats.totalInvoices }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="isAdmin" class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+            <div class="flex items-center">
+              <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-4">
+                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-medium text-gray-600">Total Usuarios</p>
+                <p class="text-2xl font-bold text-gray-900">{{ stats.totalUsers }}</p>
               </div>
             </div>
           </div>
@@ -72,7 +96,9 @@ import { InvoiceService } from '../../../core/services/invoice.service';
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-600">Total Gastado</p>
+                <p class="text-sm font-medium text-gray-600">
+                  {{ isAdmin ? 'Ventas Totales' : 'Total Gastado' }}
+                </p>
                 <p class="text-2xl font-bold text-gray-900">\${{ stats.totalSpent | number:'1.2-2' }}</p>
               </div>
             </div>
@@ -82,8 +108,63 @@ import { InvoiceService } from '../../../core/services/invoice.service';
         <!-- Quick Actions -->
         <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-8">
           <h2 class="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+          
+          <!-- Admin Actions -->
+          <div *ngIf="isAdmin" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <button 
+              routerLink="/admin/users"
+              class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+              <svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+              </svg>
+              <div class="text-left">
+                <p class="font-semibold text-gray-900">Gestionar Usuarios</p>
+                <p class="text-sm text-gray-600">Ver y editar usuarios</p>
+              </div>
+            </button>
+
+            <button 
+              routerLink="/admin/invoices"
+              class="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+              <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <div class="text-left">
+                <p class="font-semibold text-gray-900">Todas las Facturas</p>
+                <p class="text-sm text-gray-600">Ver todas las ventas</p>
+              </div>
+            </button>
+
+            <button 
+              routerLink="/admin/products"
+              class="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+              <svg class="w-8 h-8 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+              </svg>
+              <div class="text-left">
+                <p class="font-semibold text-gray-900">Gestionar Productos</p>
+                <p class="text-sm text-gray-600">CRUD productos</p>
+              </div>
+            </button>
+
+            <button 
+              (click)="viewReports()"
+              class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
+              <svg class="w-8 h-8 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              </svg>
+              <div class="text-left">
+                <p class="font-semibold text-gray-900">Reportes</p>
+                <p class="text-sm text-gray-600">Analytics y ventas</p>
+              </div>
+            </button>
+          </div>
+
+          <!-- User Actions -->
+          <div *ngIf="!isAdmin" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button 
+              routerLink="/products"
+              class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
               <svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
               </svg>
@@ -93,7 +174,9 @@ import { InvoiceService } from '../../../core/services/invoice.service';
               </div>
             </button>
 
-            <button class="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+            <button 
+              routerLink="/cart"
+              class="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
               <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 3H2.6M7 13L5.4 5M7 13l-2.293 2.293A1 1 0 005 16v2a1 1 0 001 1h1M17 21v-2a1 1 0 00-1-1h-4a1 1 0 00-1 1v2a1 1 0 001 1h4a1 1 0 001-1z"></path>
               </svg>
@@ -103,7 +186,9 @@ import { InvoiceService } from '../../../core/services/invoice.service';
               </div>
             </button>
 
-            <button class="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+            <button 
+              routerLink="/invoices"
+              class="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
               <svg class="w-8 h-8 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
               </svg>
@@ -113,14 +198,16 @@ import { InvoiceService } from '../../../core/services/invoice.service';
               </div>
             </button>
 
-            <button class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
+            <button 
+              routerLink="/profile"
+              class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
               <svg class="w-8 h-8 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
               </svg>
               <div class="text-left">
-                <p class="font-semibold text-gray-900">Configuración</p>
-                <p class="text-sm text-gray-600">Ajustes cuenta</p>
+                <p class="font-semibold text-gray-900">Mi Perfil</p>
+                <p class="text-sm text-gray-600">Editar datos</p>
               </div>
             </button>
           </div>
@@ -129,7 +216,9 @@ import { InvoiceService } from '../../../core/services/invoice.service';
         <!-- Recent Activity -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100">
           <div class="p-6 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Actividad Reciente</h2>
+            <h2 class="text-lg font-semibold text-gray-900">
+              {{ isAdmin ? 'Actividad Reciente del Sistema' : 'Mi Actividad Reciente' }}
+            </h2>
           </div>
           <div class="p-6">
             <div *ngIf="recentInvoices.length === 0" class="text-center py-8">
@@ -142,7 +231,12 @@ import { InvoiceService } from '../../../core/services/invoice.service';
             <div *ngFor="let invoice of recentInvoices" class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
               <div>
                 <p class="font-medium text-gray-900">Factura #{{ invoice.id.substring(0, 8) }}</p>
-                <p class="text-sm text-gray-600">{{ invoice.items.length }} productos</p>
+                <p class="text-sm text-gray-600">
+                  {{ invoice.items.length }} productos
+                  <span *ngIf="isAdmin && invoice.userInfo">
+                    - Usuario: {{ invoice.userInfo.username }}
+                  </span>
+                </p>
               </div>
               <div class="text-right">
                 <p class="font-semibold text-gray-900">\${{ invoice.total | number:'1.2-2' }}</p>
@@ -164,10 +258,12 @@ import { InvoiceService } from '../../../core/services/invoice.service';
 })
 export class DashboardComponent implements OnInit {
   currentUser: any = null;
+  isAdmin = false;
   stats = {
     totalProducts: 0,
     totalInvoices: 0,
-    totalSpent: 0
+    totalSpent: 0,
+    totalUsers: 0
   };
   recentInvoices: any[] = [];
 
@@ -175,11 +271,13 @@ export class DashboardComponent implements OnInit {
     private authService: AuthService,
     private productService: ProductService,
     private invoiceService: InvoiceService,
+    private adminService: AdminService,
     private router: Router
   ) {}
 
   ngOnInit() {
     this.currentUser = this.authService.getCurrentUser();
+    this.isAdmin = this.currentUser?.username === 'admin';
     this.loadDashboardData();
   }
 
@@ -192,15 +290,39 @@ export class DashboardComponent implements OnInit {
       error: (error) => console.error('Error loading products:', error)
     });
 
-    // Cargar mis facturas
-    this.invoiceService.getMyInvoices().subscribe({
-      next: (invoices) => {
-        this.stats.totalInvoices = invoices.length;
-        this.stats.totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-        this.recentInvoices = invoices.slice(0, 5); // Las últimas 5
-      },
-      error: (error) => console.error('Error loading invoices:', error)
-    });
+    if (this.isAdmin) {
+      // Cargar datos para admin
+      this.adminService.getAllInvoices().subscribe({
+        next: (invoices) => {
+          this.stats.totalInvoices = invoices.length;
+          this.stats.totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
+          this.recentInvoices = invoices.slice(0, 5);
+        },
+        error: (error) => console.error('Error loading all invoices:', error)
+      });
+
+      this.adminService.getAllUsers().subscribe({
+        next: (users) => {
+          this.stats.totalUsers = users.length;
+        },
+        error: (error) => console.error('Error loading users:', error)
+      });
+    } else {
+      // Cargar mis facturas para usuario normal
+      this.invoiceService.getMyInvoices().subscribe({
+        next: (invoices) => {
+          this.stats.totalInvoices = invoices.length;
+          this.stats.totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
+          this.recentInvoices = invoices.slice(0, 5);
+        },
+        error: (error) => console.error('Error loading invoices:', error)
+      });
+    }
+  }
+
+  viewReports() {
+    // Implementar vista de reportes
+    alert('Función de reportes en desarrollo');
   }
 
   logout() {
