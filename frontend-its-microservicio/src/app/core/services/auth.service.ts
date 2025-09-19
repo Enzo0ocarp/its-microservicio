@@ -17,19 +17,28 @@ export class AuthService {
 
   constructor(private http: HttpClient) {}
 
-  login(username: string, password: string): Observable<any> {
-    return this.http.post<any>(`${this.apiUrl}/login`, { username, password })
-      .pipe(
-        tap(response => {
+login(username: string, password: string): Observable<any> {
+  return this.http.post<any>(`${this.apiUrl}/login`, { username, password })
+    .pipe(
+      tap(response => {
+        console.log('Respuesta del backend:', response); // Debug
+        if (response.access_token) {
           localStorage.setItem(this.tokenKey, response.access_token);
           // Decodificar el token para obtener info del usuario
           const payload = this.decodeToken(response.access_token);
-          const user = { username: payload.username, userId: payload.sub };
-          localStorage.setItem(this.userKey, JSON.stringify(user));
-          this.currentUserSubject.next(user);
-        })
-      );
-  }
+          if (payload) {
+            const user = { username: payload.username, userId: payload.sub };
+            localStorage.setItem(this.userKey, JSON.stringify(user));
+            this.currentUserSubject.next(user);
+          } else {
+            console.error('No se pudo decodificar el token');
+          }
+        } else {
+          console.error('No se recibió access_token en la respuesta');
+        }
+      })
+    );
+}
 
   register(userData: any): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/register`, userData);
@@ -55,15 +64,21 @@ export class AuthService {
     return token != null && !this.isTokenExpired(token);
   }
 
-  private decodeToken(token: string): any {
-    try {
-      const payload = token.split('.')[1];
-      const decoded = atob(payload);
-      return JSON.parse(decoded);
-    } catch (error) {
-      return null;
-    }
+private decodeToken(token: string): any {
+  try {
+    console.log('Token recibido:', token); // Debug
+    const payload = token.split('.')[1];
+    console.log('Payload extraído:', payload); // Debug
+    const decoded = atob(payload);
+    console.log('Payload decodificado:', decoded); // Debug
+    const parsed = JSON.parse(decoded);
+    console.log('Payload parseado:', parsed); // Debug
+    return parsed;
+  } catch (error) {
+    console.error('Error decodificando token:', error); // Debug
+    return null;
   }
+}
 
   private isTokenExpired(token: string): boolean {
     try {
