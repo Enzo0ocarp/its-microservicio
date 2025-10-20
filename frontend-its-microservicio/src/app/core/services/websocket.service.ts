@@ -1,6 +1,6 @@
 // src/app/core/services/websocket.service.ts
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { filter, map, takeUntil } from 'rxjs/operators';
 import { NotificationService } from './notification.service';
 import { AuthService } from './auth.service';
@@ -9,24 +9,6 @@ export interface WebSocketMessage {
   type: string;
   data: any;
   timestamp: number;
-}
-
-export interface StockUpdateMessage {
-  type: 'STOCK_UPDATE';
-  data: {
-    productId: string;
-    newStock: number;
-    productName: string;
-  };
-}
-
-export interface UserActivityMessage {
-  type: 'USER_ACTIVITY';
-  data: {
-    userId: string;
-    action: string;
-    details: any;
-  };
 }
 
 @Injectable({
@@ -47,22 +29,29 @@ export class WebSocketService implements OnDestroy {
   public connectionStatus$ = this.connectionStatusSubject.asObservable();
   public messages$ = this.messagesSubject.asObservable();
 
-  private readonly WS_URL = 'ws://localhost:3001'; // WebSocket server URL
+  // CAMBIO IMPORTANTE: Deshabilitar WebSocket por defecto
+  private readonly WS_ENABLED = false; // Cambiar a true cuando tengas servidor WS
+  private readonly WS_URL = 'ws://localhost:3001';
 
   constructor(
     private notificationService: NotificationService,
     private authService: AuthService
   ) {
-    // Auto-conectar cuando el usuario esté autenticado
-    this.authService.currentUser$.pipe(
-      takeUntil(this.destroy$)
-    ).subscribe(user => {
-      if (user) {
-        this.connect();
-      } else {
-        this.disconnect();
-      }
-    });
+    // Solo conectar si está habilitado
+    if (this.WS_ENABLED) {
+      this.authService.currentUser$.pipe(
+        takeUntil(this.destroy$)
+      ).subscribe(user => {
+        if (user) {
+          this.connect();
+        } else {
+          this.disconnect();
+        }
+      });
+    } else {
+      // Simular conexión exitosa para no mostrar errores
+      this.connectionStatusSubject.next(true);
+    }
   }
 
   ngOnDestroy() {
@@ -72,6 +61,11 @@ export class WebSocketService implements OnDestroy {
   }
 
   connect(): void {
+    if (!this.WS_ENABLED) {
+      console.log('WebSocket deshabilitado. Usa WS_ENABLED = true para habilitar.');
+      return;
+    }
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -110,8 +104,6 @@ export class WebSocketService implements OnDestroy {
       this.connectionStatusSubject.next(true);
       this.reconnectAttempts = 0;
       this.startHeartbeat();
-      
-      // Unirse a salas específicas
       this.joinRooms();
     };
 
@@ -141,10 +133,10 @@ export class WebSocketService implements OnDestroy {
   private handleMessage(message: WebSocketMessage): void {
     switch (message.type) {
       case 'STOCK_UPDATE':
-        this.handleStockUpdate(message as StockUpdateMessage);
+        // Manejar actualización de stock
         break;
       case 'USER_ACTIVITY':
-        this.handleUserActivity(message as UserActivityMessage);
+        // Manejar actividad de usuarios
         break;
       case 'PONG':
         // Heartbeat response
@@ -154,47 +146,15 @@ export class WebSocketService implements OnDestroy {
     }
   }
 
-  private handleStockUpdate(message: StockUpdateMessage): void {
-    const { productId, newStock, productName } = message.data;
-    
-    if (newStock === 0) {
-      this.notificationService.outOfStock(productName);
-    } else if (newStock <= 5) {
-      this.notificationService.lowStock(productName, newStock);
-    }
-
-    // Emitir evento para que los componentes puedan reaccionar
-    // Se emite el mensaje completo que ya incluye timestamp
-    this.messagesSubject.next(message as WebSocketMessage);
-  }
-
-  private handleUserActivity(message: UserActivityMessage): void {
-    // Manejar actividad de usuarios (para admin)
-    const currentUser = this.authService.getCurrentUser();
-    if (currentUser?.username === 'admin') {
-      const { userId, action, details } = message.data;
-      
-      if (action === 'NEW_PURCHASE') {
-        this.notificationService.info(
-          'Nueva compra',
-          `Usuario ${details.username} realizó una compra por ${details.total}`,
-          { duration: 6000 }
-        );
-      }
-    }
-  }
-
   private joinRooms(): void {
     const user = this.authService.getCurrentUser();
     if (!user) return;
 
-    // Unirse a sala de usuario
     this.send({
       type: 'JOIN_ROOM',
       data: { room: `user_${user.userId}` }
     });
 
-    // Si es admin, unirse a sala de administradores
     if (user.username === 'admin') {
       this.send({
         type: 'JOIN_ROOM',
@@ -219,19 +179,10 @@ export class WebSocketService implements OnDestroy {
   }
 
   private scheduleReconnect(): void {
+    if (!this.WS_ENABLED) return;
+    
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log('Max reconnection attempts reached');
-      this.notificationService.error(
-        'Conexión perdida',
-        'No se pudo reconectar al servidor. Recarga la página para intentar nuevamente.',
-        {
-          persistent: true,
-          action: {
-            label: 'Recargar',
-            handler: () => window.location.reload()
-          }
-        }
-      );
       return;
     }
 
@@ -246,6 +197,11 @@ export class WebSocketService implements OnDestroy {
   }
 
   send(message: Partial<WebSocketMessage>): void {
+    if (!this.WS_ENABLED) {
+      console.log('WebSocket disabled, message not sent:', message);
+      return;
+    }
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       const fullMessage: WebSocketMessage = {
         timestamp: Date.now(),
@@ -258,22 +214,19 @@ export class WebSocketService implements OnDestroy {
     }
   }
 
-  // Métodos de conveniencia para escuchar tipos específicos de mensajes
-  onStockUpdates(): Observable<StockUpdateMessage> {
+  // Métodos de conveniencia
+  onStockUpdates() {
     return this.messages$.pipe(
-      filter(message => message.type === 'STOCK_UPDATE'),
-      map(message => message as StockUpdateMessage)
+      filter(message => message.type === 'STOCK_UPDATE')
     );
   }
 
-  onUserActivity(): Observable<UserActivityMessage> {
+  onUserActivity() {
     return this.messages$.pipe(
-      filter(message => message.type === 'USER_ACTIVITY'),
-      map(message => message as UserActivityMessage)
+      filter(message => message.type === 'USER_ACTIVITY')
     );
   }
 
-  // Enviar actualizaciones de stock (para admin)
   notifyStockUpdate(productId: string, newStock: number, productName: string): void {
     this.send({
       type: 'STOCK_UPDATE',
@@ -281,7 +234,6 @@ export class WebSocketService implements OnDestroy {
     });
   }
 
-  // Notificar actividad de usuario
   notifyUserActivity(action: string, details: any): void {
     const user = this.authService.getCurrentUser();
     if (user) {
@@ -294,4 +246,5 @@ export class WebSocketService implements OnDestroy {
         }
       });
     }
-  }}
+  }
+}

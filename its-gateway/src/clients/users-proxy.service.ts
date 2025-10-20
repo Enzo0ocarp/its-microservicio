@@ -10,7 +10,6 @@ export class UsersProxyService {
     @Inject('MS_USER') private readonly client: ClientProxy,
   ) {}
 
-  // ====== MÉTODOS ORIGINALES ======
   createUser(dto: CreateUserDto) {
     return firstValueFrom(this.client.send('createUser', dto));
   }
@@ -19,7 +18,15 @@ export class UsersProxyService {
     return firstValueFrom(this.client.send('validateUser', dto));
   }
 
-  // ====== NUEVOS MÉTODOS PARA CARRITO ======
+  // NUEVO - FALTABA ESTE MÉTODO
+  findAllUsers() {
+    return firstValueFrom(this.client.send('findAllUsers', {}));
+  }
+
+  findOneUser(id: string) {
+    return firstValueFrom(this.client.send('findOneUser', id));
+  }
+
   addToCart(dto: any) {
     return firstValueFrom(this.client.send('addToCart', dto));
   }

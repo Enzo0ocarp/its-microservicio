@@ -1,10 +1,29 @@
 // src/app/features/admin/product-management/product-management.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { ProductService } from '../../../core/services/product.service';
 import { AdminService } from '../../../core/services/admin.service';
+
+interface Product {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  stock: number;
+  category?: string;
+}
+
+interface ProductFormData {
+  name: string;
+  description: string;
+  price: number;
+  stock: number;
+  category: string;
+}
 
 @Component({
   selector: 'app-product-management',
@@ -28,8 +47,8 @@ import { AdminService } from '../../../core/services/admin.service';
               </span>
             </div>
             <button 
-              (click)="showCreateForm = true"
-              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium">
+              (click)="showCreateForm.set(true)"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
               <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
               </svg>
@@ -42,11 +61,21 @@ import { AdminService } from '../../../core/services/admin.service';
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Create/Edit Product Form -->
-        <div *ngIf="showCreateForm || editingProduct" class="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
+        <div *ngIf="showCreateForm() || editingProduct()" class="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
           <div class="p-6 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">
-              {{ editingProduct ? 'Editar Producto' : 'Crear Nuevo Producto' }}
-            </h2>
+            <div class="flex justify-between items-center">
+              <h2 class="text-lg font-semibold text-gray-900">
+                {{ editingProduct() ? 'Editar Producto' : 'Crear Nuevo Producto' }}
+              </h2>
+              <button 
+                (click)="cancelEdit()" 
+                class="text-gray-400 hover:text-gray-600 transition-colors"
+                title="Cerrar">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="p-6">
             <form [formGroup]="productForm" (ngSubmit)="onSubmit()" class="space-y-6">
@@ -137,7 +166,7 @@ import { AdminService } from '../../../core/services/admin.service';
                 </div>
               </div>
 
-              <div class="flex justify-end space-x-4">
+              <div class="flex justify-end space-x-4 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   (click)="cancelEdit()"
@@ -147,11 +176,11 @@ import { AdminService } from '../../../core/services/admin.service';
                 </button>
                 <button
                   type="submit"
-                  [disabled]="productForm.invalid || loading"
-                  class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
+                  [disabled]="productForm.invalid || loading()"
+                  class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                 >
-                  <span *ngIf="!loading">{{ editingProduct ? 'Actualizar' : 'Crear' }} Producto</span>
-                  <span *ngIf="loading">{{ editingProduct ? 'Actualizando...' : 'Creando...' }}</span>
+                  <span *ngIf="!loading()">{{ editingProduct() ? 'Actualizar' : 'Crear' }} Producto</span>
+                  <span *ngIf="loading()">{{ editingProduct() ? 'Actualizando...' : 'Creando...' }}</span>
                 </button>
               </div>
             </form>
@@ -159,11 +188,11 @@ import { AdminService } from '../../../core/services/admin.service';
         </div>
 
         <!-- Success/Error Messages -->
-        <div *ngIf="successMessage" class="mb-6 p-4 bg-green-100 border border-green-400 rounded-lg text-green-700">
-          {{ successMessage }}
+        <div *ngIf="successMessage()" class="mb-6 p-4 bg-green-100 border border-green-400 rounded-lg text-green-700">
+          {{ successMessage() }}
         </div>
-        <div *ngIf="errorMessage" class="mb-6 p-4 bg-red-100 border border-red-400 rounded-lg text-red-700">
-          {{ errorMessage }}
+        <div *ngIf="errorMessage()" class="mb-6 p-4 bg-red-100 border border-red-400 rounded-lg text-red-700">
+          {{ errorMessage() }}
         </div>
 
         <!-- Products List -->
@@ -172,24 +201,29 @@ import { AdminService } from '../../../core/services/admin.service';
             <div class="flex justify-between items-center">
               <h2 class="text-lg font-semibold text-gray-900">Lista de Productos</h2>
               <div class="text-sm text-gray-600">
-                {{ products.length }} producto(s) registrado(s)
+                {{ products().length }} producto(s) registrado(s)
               </div>
             </div>
           </div>
           
-          <div *ngIf="loadingProducts" class="p-12 text-center">
+          <div *ngIf="loadingProducts()" class="p-12 text-center">
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <p class="mt-2 text-gray-600">Cargando productos...</p>
           </div>
 
-          <div *ngIf="!loadingProducts && products.length === 0" class="p-12 text-center">
+          <div *ngIf="!loadingProducts() && products().length === 0" class="p-12 text-center">
             <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
             </svg>
-            <p class="text-gray-600">No hay productos registrados</p>
+            <p class="text-gray-600 mb-2">No hay productos registrados</p>
+            <button 
+              (click)="showCreateForm.set(true)"
+              class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+              Crear el primer producto
+            </button>
           </div>
 
-          <div *ngIf="!loadingProducts && products.length > 0" class="overflow-x-auto">
+          <div *ngIf="!loadingProducts() && products().length > 0" class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
@@ -214,7 +248,7 @@ import { AdminService } from '../../../core/services/admin.service';
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <tr *ngFor="let product of products" class="hover:bg-gray-50">
+                <tr *ngFor="let product of products(); trackBy: trackByProductId" class="hover:bg-gray-50 transition-colors">
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
                       <div class="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center mr-3">
@@ -224,7 +258,7 @@ import { AdminService } from '../../../core/services/admin.service';
                       </div>
                       <div>
                         <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
-                        <div class="text-sm text-gray-500">{{ product.description || 'Sin descripción' }}</div>
+                        <div class="text-sm text-gray-500 line-clamp-1">{{ product.description || 'Sin descripción' }}</div>
                       </div>
                     </div>
                   </td>
@@ -249,7 +283,8 @@ import { AdminService } from '../../../core/services/admin.service';
                     <div class="flex justify-end space-x-2">
                       <button
                         (click)="editProduct(product)"
-                        class="text-indigo-600 hover:text-indigo-900 p-1"
+                        [disabled]="loading()"
+                        class="text-indigo-600 hover:text-indigo-900 p-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Editar"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,7 +293,8 @@ import { AdminService } from '../../../core/services/admin.service';
                       </button>
                       <button
                         (click)="deleteProduct(product)"
-                        class="text-red-600 hover:text-red-900 p-1"
+                        [disabled]="deleting()"
+                        class="text-red-600 hover:text-red-900 p-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Eliminar"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,21 +312,28 @@ import { AdminService } from '../../../core/services/admin.service';
     </div>
   `
 })
-export class ProductManagementComponent implements OnInit {
-  products: any[] = [];
+export class ProductManagementComponent implements OnInit, OnDestroy {
+  // Signals
+  products = signal<Product[]>([]);
+  showCreateForm = signal(false);
+  editingProduct = signal<Product | null>(null);
+  loading = signal(false);
+  loadingProducts = signal(true);
+  deleting = signal(false);
+  successMessage = signal('');
+  errorMessage = signal('');
+
+  // Form
   productForm: FormGroup;
-  showCreateForm = false;
-  editingProduct: any = null;
-  loading = false;
-  loadingProducts = true;
-  successMessage = '';
-  errorMessage = '';
+
+  private destroy$ = new Subject<void>();
 
   constructor(
     private fb: FormBuilder,
     private productService: ProductService,
     private adminService: AdminService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {
     this.productForm = this.fb.group({
       name: ['', [Validators.required]],
@@ -302,66 +345,101 @@ export class ProductManagementComponent implements OnInit {
   }
 
   ngOnInit() {
+    console.log('Iniciando Product Management...'); // Debug
     this.loadProducts();
   }
 
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
   loadProducts() {
-    this.loadingProducts = true;
-    this.productService.getProducts().subscribe({
+    console.log('Cargando productos...'); // Debug
+    this.loadingProducts.set(true);
+    
+    this.productService.getProducts().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
       next: (products) => {
-        this.products = products;
-        this.loadingProducts = false;
+        console.log('Productos cargados:', products.length); // Debug
+        this.products.set(products);
+        this.loadingProducts.set(false);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error loading products:', error);
-        this.errorMessage = 'Error al cargar los productos';
-        this.loadingProducts = false;
+        this.errorMessage.set('Error al cargar los productos');
+        this.loadingProducts.set(false);
+        this.cdr.markForCheck();
       }
     });
   }
 
   onSubmit() {
     if (this.productForm.valid) {
-      this.loading = true;
+      console.log('Enviando formulario...', this.productForm.value); // Debug
+      this.loading.set(true);
       this.clearMessages();
 
-      const productData = this.productForm.value;
+      const productData: ProductFormData = this.productForm.value;
+      const currentEditingProduct = this.editingProduct();
 
-      if (this.editingProduct) {
+      if (currentEditingProduct) {
         // Update existing product
-        this.adminService.updateProduct(this.editingProduct.id, productData).subscribe({
+        console.log('Actualizando producto:', currentEditingProduct.id); // Debug
+        this.adminService.updateProduct(currentEditingProduct.id, productData).pipe(
+          takeUntil(this.destroy$)
+        ).subscribe({
           next: (response) => {
-            this.successMessage = 'Producto actualizado exitosamente';
+            console.log('Producto actualizado:', response); // Debug
+            this.successMessage.set(`Producto "${productData.name}" actualizado exitosamente`);
             this.cancelEdit();
             this.loadProducts();
-            this.loading = false;
+            this.loading.set(false);
+            setTimeout(() => this.clearMessages(), 5000);
           },
           error: (error) => {
-            this.errorMessage = 'Error al actualizar el producto';
-            this.loading = false;
+            console.error('Error updating product:', error);
+            this.errorMessage.set('Error al actualizar el producto');
+            this.loading.set(false);
+            this.cdr.markForCheck();
           }
         });
       } else {
         // Create new product
-        this.adminService.createProduct(productData).subscribe({
+        console.log('Creando nuevo producto'); // Debug
+        this.adminService.createProduct(productData).pipe(
+          takeUntil(this.destroy$)
+        ).subscribe({
           next: (response) => {
-            this.successMessage = 'Producto creado exitosamente';
+            console.log('Producto creado:', response); // Debug
+            this.successMessage.set(`Producto "${productData.name}" creado exitosamente`);
             this.cancelEdit();
             this.loadProducts();
-            this.loading = false;
+            this.loading.set(false);
+            setTimeout(() => this.clearMessages(), 5000);
           },
           error: (error) => {
-            this.errorMessage = 'Error al crear el producto';
-            this.loading = false;
+            console.error('Error creating product:', error);
+            this.errorMessage.set('Error al crear el producto');
+            this.loading.set(false);
+            this.cdr.markForCheck();
           }
         });
       }
+    } else {
+      // Mark all fields as touched to show validation errors
+      Object.keys(this.productForm.controls).forEach(key => {
+        this.productForm.get(key)?.markAsTouched();
+      });
     }
   }
 
-  editProduct(product: any) {
-    this.editingProduct = product;
-    this.showCreateForm = false;
+  editProduct(product: Product) {
+    console.log('Editando producto:', product.name); // Debug
+    this.editingProduct.set(product);
+    this.showCreateForm.set(false);
     this.productForm.patchValue({
       name: product.name,
       description: product.description || '',
@@ -370,25 +448,45 @@ export class ProductManagementComponent implements OnInit {
       category: product.category || ''
     });
     this.clearMessages();
+    
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  deleteProduct(product: any) {
-    if (confirm(`¿Estás seguro de que quieres eliminar el producto "${product.name}"?`)) {
-      this.adminService.deleteProduct(product.id).subscribe({
-        next: (response) => {
-          this.successMessage = 'Producto eliminado exitosamente';
-          this.loadProducts();
-        },
-        error: (error) => {
-          this.errorMessage = 'Error al eliminar el producto';
-        }
-      });
+  deleteProduct(product: Product) {
+    const confirmMessage = `¿Estás seguro de que quieres eliminar el producto "${product.name}"?\n\nPrecio: $${product.price.toFixed(2)}\nStock: ${product.stock} unidades\n\nEsta acción no se puede deshacer.`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
     }
+
+    console.log('Eliminando producto:', product.name); // Debug
+    this.deleting.set(true);
+    this.clearMessages();
+
+    this.adminService.deleteProduct(product.id).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        console.log('Producto eliminado:', response); // Debug
+        this.successMessage.set(`Producto "${product.name}" eliminado exitosamente`);
+        this.deleting.set(false);
+        this.loadProducts();
+        setTimeout(() => this.clearMessages(), 5000);
+      },
+      error: (error) => {
+        console.error('Error deleting product:', error);
+        this.errorMessage.set('Error al eliminar el producto. Intenta nuevamente.');
+        this.deleting.set(false);
+        this.cdr.markForCheck();
+        setTimeout(() => this.clearMessages(), 5000);
+      }
+    });
   }
 
   cancelEdit() {
-    this.showCreateForm = false;
-    this.editingProduct = null;
+    this.showCreateForm.set(false);
+    this.editingProduct.set(null);
     this.productForm.reset({
       name: '',
       description: '',
@@ -399,9 +497,9 @@ export class ProductManagementComponent implements OnInit {
     this.clearMessages();
   }
 
-  clearMessages() {
-    this.successMessage = '';
-    this.errorMessage = '';
+  private clearMessages() {
+    this.successMessage.set('');
+    this.errorMessage.set('');
   }
 
   getStockClass(stock: number): string {
@@ -424,6 +522,8 @@ export class ProductManagementComponent implements OnInit {
     if (stock <= 10) return 'Stock bajo';
     return 'Disponible';
   }
+
+  trackByProductId = (index: number, product: Product): string => product.id;
 
   goBack() {
     this.router.navigate(['/dashboard']);

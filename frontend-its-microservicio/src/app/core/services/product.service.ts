@@ -1,7 +1,8 @@
 // src/app/core/services/product.service.ts
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
@@ -12,11 +13,28 @@ export class ProductService {
   constructor(private http: HttpClient) {}
 
   getProducts(): Observable<any[]> {
-    return this.http.get<any[]>(this.apiUrl);
+    // Headers para forzar que no use caché
+    const headers = new HttpHeaders({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
+    return this.http.get<any[]>(this.apiUrl, { headers }).pipe(
+      tap(response => {
+        console.log('✅ Productos recibidos:', response);
+      })
+    );
   }
 
   getProduct(id: string): Observable<any> {
-    return this.http.get<any>(`${this.apiUrl}/${id}`);
+    const headers = new HttpHeaders({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
+    return this.http.get<any>(`${this.apiUrl}/${id}`, { headers });
   }
 
   createProduct(product: any): Observable<any> {

@@ -1,7 +1,7 @@
 // src/app/app.config.ts
 import { ApplicationConfig, importProvidersFrom, ErrorHandler } from '@angular/core';
 import { provideRouter, withPreloading, PreloadAllModules, withInMemoryScrolling } from '@angular/router';
-import { provideHttpClient, withInterceptors, HTTP_INTERCEPTORS } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { provideClientHydration } from '@angular/platform-browser';
 
@@ -14,16 +14,9 @@ export class GlobalErrorHandler implements ErrorHandler {
   handleError(error: any): void {
     console.error('Global error caught by ErrorHandler:', error);
     
-    // En producción, aquí enviarías el error a un servicio de logging
-    // como Sentry, LogRocket, etc.
     if (error?.rejection) {
-      // Unhandled promise rejection
       console.error('Unhandled promise rejection:', error.rejection);
     }
-    
-    // No relanzar el error para evitar crashes de la aplicación
-    // En desarrollo, puedes descomentar la siguiente línea:
-    // throw error;
   }
 }
 
@@ -38,13 +31,11 @@ export class LoadingInterceptor implements HttpInterceptor {
   private activeRequests = 0;
   
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    // Incrementar contador de requests activos
     this.activeRequests++;
     this.updateLoadingState();
     
     return next.handle(req).pipe(
       finalize(() => {
-        // Decrementar contador cuando el request termine
         this.activeRequests--;
         this.updateLoadingState();
       })
@@ -52,52 +43,8 @@ export class LoadingInterceptor implements HttpInterceptor {
   }
   
   private updateLoadingState(): void {
-    // Emitir evento personalizado para el estado de loading
     const isLoading = this.activeRequests > 0;
     window.dispatchEvent(new CustomEvent('globalLoading', { detail: { isLoading } }));
-  }
-}
-
-// Cache Interceptor for optimized requests
-@Injectable()
-export class CacheInterceptor implements HttpInterceptor {
-  private cache = new Map<string, { response: any; timestamp: number }>();
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
-  
-  intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    // Solo cachear requests GET que no sean sensibles
-    if (req.method !== 'GET' || this.isSensitiveUrl(req.url)) {
-      return next.handle(req);
-    }
-    
-    const cachedResponse = this.getFromCache(req.url);
-    if (cachedResponse) {
-      // Retornar respuesta cacheada
-      return new Observable(observer => {
-        observer.next(cachedResponse);
-        observer.complete();
-      });
-    }
-    
-    return next.handle(req).pipe(
-      finalize(() => {
-        // Guardar en cache si es exitoso
-        // Implementación simplificada
-      })
-    );
-  }
-  
-  private isSensitiveUrl(url: string): boolean {
-    const sensitivePatterns = ['/auth', '/cart', '/checkout', '/profile'];
-    return sensitivePatterns.some(pattern => url.includes(pattern));
-  }
-  
-  private getFromCache(url: string): any {
-    const cached = this.cache.get(url);
-    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      return cached.response;
-    }
-    return null;
   }
 }
 
@@ -106,7 +53,7 @@ export const appConfig: ApplicationConfig = {
     // Router configuration
     provideRouter(
       routes,
-      withPreloading(PreloadAllModules), // Preload all lazy-loaded routes
+      withPreloading(PreloadAllModules),
       withInMemoryScrolling({
         scrollPositionRestoration: 'top',
         anchorScrolling: 'enabled'
@@ -115,10 +62,10 @@ export const appConfig: ApplicationConfig = {
     
     // HTTP Client with interceptors
     provideHttpClient(
-      withInterceptors([])
+      withInterceptorsFromDi()
     ),
     
-    // HTTP Interceptors (legacy style for complex interceptors)
+    // HTTP Interceptors - ORDEN IMPORTA (Auth primero, luego Error)
     {
       provide: HTTP_INTERCEPTORS,
       useClass: AuthInterceptor,
@@ -132,11 +79,6 @@ export const appConfig: ApplicationConfig = {
     {
       provide: HTTP_INTERCEPTORS,
       useClass: LoadingInterceptor,
-      multi: true
-    },
-    {
-      provide: HTTP_INTERCEPTORS,
-      useClass: CacheInterceptor,
       multi: true
     },
     
@@ -160,15 +102,9 @@ function getEnvironmentProviders() {
   const isProduction = window.location.hostname !== 'localhost';
   
   if (isProduction) {
-    return [
-      // Production-specific providers
-      // Por ejemplo: Analytics, Error reporting, etc.
-    ];
+    return [];
   } else {
-    return [
-      // Development-specific providers
-      // Por ejemplo: Mock services, debugging tools, etc.
-    ];
+    return [];
   }
 }
 
@@ -179,40 +115,35 @@ export const APP_CONFIG = {
   API_BASE_URL: 'http://localhost:3000',
   WS_BASE_URL: 'ws://localhost:3001',
   
-  // Feature flags
   FEATURES: {
-    WEBSOCKETS: true,
+    WEBSOCKETS: false,
     OFFLINE_SUPPORT: true,
     PUSH_NOTIFICATIONS: false,
     DARK_MODE: true,
     ANALYTICS: false
   },
   
-  // UI Configuration
   UI: {
     ITEMS_PER_PAGE: 12,
     NOTIFICATION_DURATION: 5000,
-    LOADING_DELAY: 300, // Delay before showing loading spinner
+    LOADING_DELAY: 300,
     DEBOUNCE_TIME: 300,
     ANIMATION_DURATION: 200
   },
   
-  // Cache configuration
   CACHE: {
-    PRODUCTS_TTL: 5 * 60 * 1000, // 5 minutes
-    USER_DATA_TTL: 10 * 60 * 1000, // 10 minutes
-    STATIC_DATA_TTL: 30 * 60 * 1000 // 30 minutes
+    PRODUCTS_TTL: 5 * 60 * 1000,
+    USER_DATA_TTL: 10 * 60 * 1000,
+    STATIC_DATA_TTL: 30 * 60 * 1000
   },
   
-  // Validation rules
   VALIDATION: {
     PASSWORD_MIN_LENGTH: 6,
     USERNAME_MIN_LENGTH: 3,
     MAX_CART_ITEMS: 50,
-    MAX_FILE_SIZE: 5 * 1024 * 1024 // 5MB
+    MAX_FILE_SIZE: 5 * 1024 * 1024
   },
   
-  // External services
   EXTERNAL: {
     GOOGLE_ANALYTICS_ID: 'GA_MEASUREMENT_ID',
     SENTRY_DSN: 'SENTRY_DSN_URL',
@@ -220,7 +151,6 @@ export const APP_CONFIG = {
   }
 };
 
-// Type definitions for configuration
 export interface AppFeatures {
   WEBSOCKETS: boolean;
   OFFLINE_SUPPORT: boolean;
@@ -237,12 +167,10 @@ export interface UIConfig {
   ANIMATION_DURATION: number;
 }
 
-// Utility function to get configuration
 export function getConfig<T = any>(path: string): T {
   return path.split('.').reduce((obj, key) => obj?.[key], APP_CONFIG as any);
 }
 
-// Feature flag checker
 export function isFeatureEnabled(feature: keyof AppFeatures): boolean {
   return APP_CONFIG.FEATURES[feature];
 }

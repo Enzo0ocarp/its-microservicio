@@ -1,11 +1,21 @@
 // src/app/features/auth/dashboard/dashboard.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+
 import { AuthService } from '../../../core/services/auth.service';
 import { ProductService } from '../../../core/services/product.service';
 import { InvoiceService } from '../../../core/services/invoice.service';
 import { AdminService } from '../../../core/services/admin.service';
+
+interface DashboardStats {
+  totalProducts: number;
+  totalInvoices: number;
+  totalSpent: number;
+  totalUsers: number;
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -20,14 +30,14 @@ import { AdminService } from '../../../core/services/admin.service';
             <div class="flex items-center">
               <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg mr-3"></div>
               <h1 class="text-2xl font-bold text-gray-900">
-                {{ isAdmin ? 'Panel de Administración' : 'Dashboard' }}
+                {{ isAdmin() ? 'Panel de Administración' : 'Dashboard' }}
               </h1>
-              <span *ngIf="isAdmin" class="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
+              <span *ngIf="isAdmin()" class="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
                 ADMIN
               </span>
             </div>
             <div class="flex items-center space-x-4">
-              <span class="text-gray-700">Hola, {{ currentUser?.username || 'Usuario' }}</span>
+              <span class="text-gray-700">Hola, {{ currentUser()?.username || 'Usuario' }}</span>
               <button 
                 (click)="logout()"
                 class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
@@ -38,10 +48,19 @@ import { AdminService } from '../../../core/services/admin.service';
         </div>
       </header>
 
+      <!-- Loading State -->
+      <div *ngIf="loading()" class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="text-center py-12">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p class="mt-4 text-gray-600">Cargando dashboard...</p>
+        </div>
+      </div>
+
       <!-- Main Content -->
-      <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main *ngIf="!loading()" class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <!-- Total Products Card -->
           <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <div class="flex items-center">
               <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
@@ -51,13 +70,14 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">
-                  {{ isAdmin ? 'Total Productos' : 'Productos' }}
+                  {{ isAdmin() ? 'Total Productos' : 'Productos' }}
                 </p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalProducts }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ stats().totalProducts }}</p>
               </div>
             </div>
           </div>
 
+          <!-- Total Invoices Card -->
           <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <div class="flex items-center">
               <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
@@ -67,14 +87,15 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">
-                  {{ isAdmin ? 'Total Facturas' : 'Mis Facturas' }}
+                  {{ isAdmin() ? 'Total Facturas' : 'Mis Facturas' }}
                 </p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalInvoices }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ stats().totalInvoices }}</p>
               </div>
             </div>
           </div>
 
-          <div *ngIf="isAdmin" class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <!-- Total Users Card (Admin only) -->
+          <div *ngIf="isAdmin()" class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <div class="flex items-center">
               <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-4">
                 <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -83,11 +104,12 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Total Usuarios</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.totalUsers }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ stats().totalUsers }}</p>
               </div>
             </div>
           </div>
 
+          <!-- Total Spent Card -->
           <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <div class="flex items-center">
               <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
@@ -97,9 +119,9 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">
-                  {{ isAdmin ? 'Ventas Totales' : 'Total Gastado' }}
+                  {{ isAdmin() ? 'Ventas Totales' : 'Total Gastado' }}
                 </p>
-                <p class="text-2xl font-bold text-gray-900">\${{ stats.totalSpent | number:'1.2-2' }}</p>
+                <p class="text-2xl font-bold text-gray-900">\${{ stats().totalSpent | number:'1.2-2' }}</p>
               </div>
             </div>
           </div>
@@ -110,7 +132,7 @@ import { AdminService } from '../../../core/services/admin.service';
           <h2 class="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
           
           <!-- Admin Actions -->
-          <div *ngIf="isAdmin" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div *ngIf="isAdmin()" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <button 
               routerLink="/admin/users"
               class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
@@ -148,7 +170,7 @@ import { AdminService } from '../../../core/services/admin.service';
             </button>
 
             <button 
-              (click)="viewReports()"
+              routerLink="/admin/reports"
               class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
               <svg class="w-8 h-8 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
@@ -161,7 +183,7 @@ import { AdminService } from '../../../core/services/admin.service';
           </div>
 
           <!-- User Actions -->
-          <div *ngIf="!isAdmin" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div *ngIf="!isAdmin()" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <button 
               routerLink="/products"
               class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
@@ -217,23 +239,24 @@ import { AdminService } from '../../../core/services/admin.service';
         <div class="bg-white rounded-xl shadow-sm border border-gray-100">
           <div class="p-6 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">
-              {{ isAdmin ? 'Actividad Reciente del Sistema' : 'Mi Actividad Reciente' }}
+              {{ isAdmin() ? 'Actividad Reciente del Sistema' : 'Mi Actividad Reciente' }}
             </h2>
           </div>
           <div class="p-6">
-            <div *ngIf="recentInvoices.length === 0" class="text-center py-8">
+            <div *ngIf="recentInvoices().length === 0" class="text-center py-8">
               <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
               </svg>
               <p class="text-gray-500">No hay facturas recientes</p>
             </div>
             
-            <div *ngFor="let invoice of recentInvoices" class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
+            <div *ngFor="let invoice of recentInvoices(); trackBy: trackByInvoiceId" 
+                 class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
               <div>
                 <p class="font-medium text-gray-900">Factura #{{ invoice.id.substring(0, 8) }}</p>
                 <p class="text-sm text-gray-600">
                   {{ invoice.items.length }} productos
-                  <span *ngIf="isAdmin && invoice.userInfo">
+                  <span *ngIf="isAdmin() && invoice.userInfo">
                     - Usuario: {{ invoice.userInfo.username }}
                   </span>
                 </p>
@@ -256,74 +279,171 @@ import { AdminService } from '../../../core/services/admin.service';
     }
   `]
 })
-export class DashboardComponent implements OnInit {
-  currentUser: any = null;
-  isAdmin = false;
-  stats = {
+export class DashboardComponent implements OnInit, OnDestroy {
+  // Signals
+  currentUser = signal<any>(null);
+  isAdmin = signal(false);
+  loading = signal(true);
+  stats = signal<DashboardStats>({
     totalProducts: 0,
     totalInvoices: 0,
     totalSpent: 0,
     totalUsers: 0
-  };
-  recentInvoices: any[] = [];
+  });
+  recentInvoices = signal<any[]>([]);
+
+  private destroy$ = new Subject<void>();
+  private loadingCount = 0;
 
   constructor(
     private authService: AuthService,
     private productService: ProductService,
     private invoiceService: InvoiceService,
     private adminService: AdminService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
-    this.currentUser = this.authService.getCurrentUser();
-    this.isAdmin = this.currentUser?.username === 'admin';
+    const user = this.authService.getCurrentUser();
+    console.log('Usuario actual:', user); // Debug
+    
+    this.currentUser.set(user);
+    this.isAdmin.set(user?.username === 'admin');
+    
     this.loadDashboardData();
   }
 
-  loadDashboardData() {
-    // Cargar productos
-    this.productService.getProducts().subscribe({
-      next: (products) => {
-        this.stats.totalProducts = products.length;
-      },
-      error: (error) => console.error('Error loading products:', error)
-    });
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
-    if (this.isAdmin) {
-      // Cargar datos para admin
-      this.adminService.getAllInvoices().subscribe({
-        next: (invoices) => {
-          this.stats.totalInvoices = invoices.length;
-          this.stats.totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-          this.recentInvoices = invoices.slice(0, 5);
-        },
-        error: (error) => console.error('Error loading all invoices:', error)
-      });
+  private startLoading() {
+    this.loadingCount++;
+    this.loading.set(true);
+  }
 
-      this.adminService.getAllUsers().subscribe({
-        next: (users) => {
-          this.stats.totalUsers = users.length;
-        },
-        error: (error) => console.error('Error loading users:', error)
-      });
-    } else {
-      // Cargar mis facturas para usuario normal
-      this.invoiceService.getMyInvoices().subscribe({
-        next: (invoices) => {
-          this.stats.totalInvoices = invoices.length;
-          this.stats.totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-          this.recentInvoices = invoices.slice(0, 5);
-        },
-        error: (error) => console.error('Error loading invoices:', error)
-      });
+  private finishLoading() {
+    this.loadingCount--;
+    if (this.loadingCount <= 0) {
+      this.loadingCount = 0;
+      this.loading.set(false);
+      this.cdr.markForCheck();
     }
   }
 
-  viewReports() {
-    // Implementar vista de reportes
-    alert('Función de reportes en desarrollo');
+  loadDashboardData() {
+    console.log('Cargando datos del dashboard...'); // Debug
+    
+    // Cargar productos (común para admin y usuario)
+    this.startLoading();
+    this.productService.getProducts().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (products) => {
+        console.log('Productos cargados:', products.length); // Debug
+        const currentStats = this.stats();
+        this.stats.set({
+          ...currentStats,
+          totalProducts: products.length
+        });
+        this.finishLoading();
+      },
+      error: (error) => {
+        console.error('Error loading products:', error);
+        this.finishLoading();
+      }
+    });
+
+    if (this.isAdmin()) {
+      console.log('Cargando datos de admin...'); // Debug
+      this.loadAdminData();
+    } else {
+      console.log('Cargando datos de usuario...'); // Debug
+      this.loadUserData();
+    }
   }
+
+  private loadAdminData() {
+    // Cargar facturas (admin)
+    this.startLoading();
+    this.adminService.getAllInvoices().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (invoices) => {
+        console.log('Facturas admin cargadas:', invoices.length); // Debug
+        const totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
+        const recent = invoices
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 5);
+        
+        const currentStats = this.stats();
+        this.stats.set({
+          ...currentStats,
+          totalInvoices: invoices.length,
+          totalSpent: totalSpent
+        });
+        this.recentInvoices.set(recent);
+        this.finishLoading();
+      },
+      error: (error) => {
+        console.error('Error loading invoices:', error);
+        this.finishLoading();
+      }
+    });
+
+    // Cargar usuarios (admin)
+    this.startLoading();
+    this.adminService.getAllUsers().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (users) => {
+        console.log('Usuarios cargados:', users.length); // Debug
+        const currentStats = this.stats();
+        this.stats.set({
+          ...currentStats,
+          totalUsers: users.length
+        });
+        this.finishLoading();
+      },
+      error: (error) => {
+        console.error('Error loading users:', error);
+        this.finishLoading();
+      }
+    });
+  }
+
+  private loadUserData() {
+    // Cargar mis facturas (usuario normal)
+    this.startLoading();
+    this.invoiceService.getMyInvoices().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (invoices) => {
+        console.log('Mis facturas cargadas:', invoices.length); // Debug
+        const totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
+        const recent = invoices
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 5);
+        
+        const currentStats = this.stats();
+        this.stats.set({
+          ...currentStats,
+          totalInvoices: invoices.length,
+          totalSpent: totalSpent
+        });
+        this.recentInvoices.set(recent);
+        this.finishLoading();
+      },
+      error: (error) => {
+        console.error('Error loading my invoices:', error);
+        this.finishLoading();
+      }
+    });
+  }
+
+  trackByInvoiceId = (index: number, invoice: any): string => invoice.id;
 
   logout() {
     this.authService.logout();

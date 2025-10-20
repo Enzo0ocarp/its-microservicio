@@ -1,8 +1,34 @@
 // src/app/features/admin/invoice-management/invoice-management.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { AdminService } from '../../../core/services/admin.service';
+
+interface InvoiceItem {
+  productId: string;
+  quantity: number;
+  price: number;
+}
+
+interface Invoice {
+  id: string;
+  userId: string;
+  items: InvoiceItem[];
+  total: number;
+  createdAt: string;
+  userInfo?: {
+    username: string;
+    email: string;
+  };
+}
+
+interface InvoiceStats {
+  totalSales: number;
+  totalItems: number;
+  averageSale: number;
+}
 
 @Component({
   selector: 'app-invoice-management',
@@ -42,7 +68,7 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Total Facturas</p>
-                <p class="text-2xl font-bold text-gray-900">{{ invoices.length }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ invoices().length }}</p>
               </div>
             </div>
           </div>
@@ -56,7 +82,7 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Ventas Totales</p>
-                <p class="text-2xl font-bold text-gray-900">\${{ getTotalSales() | number:'1.2-2' }}</p>
+                <p class="text-2xl font-bold text-gray-900">\${{ stats().totalSales | number:'1.2-2' }}</p>
               </div>
             </div>
           </div>
@@ -70,7 +96,7 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Productos Vendidos</p>
-                <p class="text-2xl font-bold text-gray-900">{{ getTotalItems() }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ stats().totalItems }}</p>
               </div>
             </div>
           </div>
@@ -84,18 +110,18 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Promedio por Venta</p>
-                <p class="text-2xl font-bold text-gray-900">\${{ getAverageSale() | number:'1.2-2' }}</p>
+                <p class="text-2xl font-bold text-gray-900">\${{ stats().averageSale | number:'1.2-2' }}</p>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Success/Error Messages -->
-        <div *ngIf="successMessage" class="mb-6 p-4 bg-green-100 border border-green-400 rounded-lg text-green-700">
-          {{ successMessage }}
+        <div *ngIf="successMessage()" class="mb-6 p-4 bg-green-100 border border-green-400 rounded-lg text-green-700">
+          {{ successMessage() }}
         </div>
-        <div *ngIf="errorMessage" class="mb-6 p-4 bg-red-100 border border-red-400 rounded-lg text-red-700">
-          {{ errorMessage }}
+        <div *ngIf="errorMessage()" class="mb-6 p-4 bg-red-100 border border-red-400 rounded-lg text-red-700">
+          {{ errorMessage() }}
         </div>
 
         <!-- Invoices List -->
@@ -104,25 +130,25 @@ import { AdminService } from '../../../core/services/admin.service';
             <div class="flex justify-between items-center">
               <h2 class="text-lg font-semibold text-gray-900">Todas las Facturas</h2>
               <div class="text-sm text-gray-600">
-                {{ invoices.length }} factura(s) registrada(s)
+                {{ invoices().length }} factura(s) registrada(s)
               </div>
             </div>
           </div>
           
-          <div *ngIf="loading" class="p-12 text-center">
+          <div *ngIf="loading()" class="p-12 text-center">
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <p class="mt-2 text-gray-600">Cargando facturas...</p>
           </div>
 
-          <div *ngIf="!loading && invoices.length === 0" class="p-12 text-center">
+          <div *ngIf="!loading() && invoices().length === 0" class="p-12 text-center">
             <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             <p class="text-gray-600">No hay facturas registradas</p>
           </div>
 
-          <div *ngIf="!loading && invoices.length > 0" class="divide-y divide-gray-200">
-            <div *ngFor="let invoice of invoices" class="p-6 hover:bg-gray-50">
+          <div *ngIf="!loading() && invoices().length > 0" class="divide-y divide-gray-200">
+            <div *ngFor="let invoice of invoices(); trackBy: trackByInvoiceId" class="p-6 hover:bg-gray-50 transition-colors">
               <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                   <div class="w-12 h-12 bg-gradient-to-br from-green-100 to-blue-100 rounded-lg flex items-center justify-center">
@@ -159,7 +185,8 @@ import { AdminService } from '../../../core/services/admin.service';
                 <div class="bg-gray-50 rounded-lg p-4">
                   <h4 class="text-sm font-medium text-gray-900 mb-2">Productos comprados:</h4>
                   <div class="space-y-2">
-                    <div *ngFor="let item of invoice.items" class="flex justify-between items-center text-sm">
+                    <div *ngFor="let item of invoice.items; trackBy: trackByItemId" 
+                         class="flex justify-between items-center text-sm">
                       <span class="text-gray-600">
                         Producto {{ item.productId.substring(0, 8) }} x{{ item.quantity }}
                       </span>
@@ -181,21 +208,22 @@ import { AdminService } from '../../../core/services/admin.service';
               <div class="mt-4 pl-16 flex space-x-3">
                 <button
                   (click)="viewInvoiceDetails(invoice)"
-                  class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  class="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                 >
                   Ver Detalles
                 </button>
                 <button
                   (click)="downloadInvoice(invoice)"
-                  class="text-green-600 hover:text-green-800 text-sm font-medium"
+                  class="text-green-600 hover:text-green-800 text-sm font-medium transition-colors"
                 >
                   Descargar PDF
                 </button>
                 <button
                   (click)="deleteInvoice(invoice)"
-                  class="text-red-600 hover:text-red-800 text-sm font-medium"
+                  [disabled]="deleting()"
+                  class="text-red-600 hover:text-red-800 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Eliminar
+                  {{ deleting() ? 'Eliminando...' : 'Eliminar' }}
                 </button>
               </div>
             </div>
@@ -205,73 +233,156 @@ import { AdminService } from '../../../core/services/admin.service';
     </div>
   `
 })
-export class InvoiceManagementComponent implements OnInit {
-  invoices: any[] = [];
-  loading = true;
-  successMessage = '';
-  errorMessage = '';
+export class InvoiceManagementComponent implements OnInit, OnDestroy {
+  // Signals
+  invoices = signal<Invoice[]>([]);
+  loading = signal(true);
+  deleting = signal(false);
+  successMessage = signal('');
+  errorMessage = signal('');
+
+  // Computed stats
+  stats = computed(() => {
+    const allInvoices = this.invoices();
+    const totalSales = allInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const totalItems = allInvoices.reduce((sum, inv) => 
+      sum + inv.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
+    );
+    const averageSale = allInvoices.length > 0 ? totalSales / allInvoices.length : 0;
+
+    return {
+      totalSales,
+      totalItems,
+      averageSale
+    };
+  });
+
+  private destroy$ = new Subject<void>();
 
   constructor(
     private adminService: AdminService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
+    console.log('Iniciando Invoice Management...'); // Debug
     this.loadInvoices();
   }
 
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
   loadInvoices() {
-    this.loading = true;
-    this.adminService.getAllInvoices().subscribe({
+    console.log('Cargando facturas...'); // Debug
+    this.loading.set(true);
+    this.clearMessages();
+    
+    this.adminService.getAllInvoices().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
       next: (invoices) => {
-        this.invoices = invoices.sort((a, b) => 
+        console.log('Facturas cargadas:', invoices.length); // Debug
+        
+        // Ordenar por fecha (más recientes primero)
+        const sorted = [...invoices].sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-        this.loading = false;
+        
+        this.invoices.set(sorted);
+        this.loading.set(false);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error loading invoices:', error);
-        this.errorMessage = 'Error al cargar las facturas';
-        this.loading = false;
+        this.errorMessage.set('Error al cargar las facturas');
+        this.loading.set(false);
+        this.cdr.markForCheck();
       }
     });
   }
 
-  viewInvoiceDetails(invoice: any) {
-    alert(`Detalles de la factura:\n\nID: ${invoice.id}\nCliente: ${invoice.userInfo?.username}\nTotal: ${invoice.total}\nFecha: ${new Date(invoice.createdAt).toLocaleDateString()}\nProductos: ${invoice.items.length}`);
+  viewInvoiceDetails(invoice: Invoice) {
+    const itemsList = invoice.items
+      .map((item, index) => `  ${index + 1}. Producto ${item.productId.substring(0, 8)} - Cantidad: ${item.quantity} - Precio: $${item.price.toFixed(2)}`)
+      .join('\n');
+
+    const details = `
+DETALLES DE LA FACTURA
+
+ID: ${invoice.id}
+Cliente: ${invoice.userInfo?.username || 'Desconocido'}
+Email: ${invoice.userInfo?.email || 'No disponible'}
+Fecha: ${new Date(invoice.createdAt).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}
+
+PRODUCTOS (${invoice.items.length}):
+${itemsList}
+
+TOTAL: $${invoice.total.toFixed(2)}
+    `.trim();
+    
+    alert(details);
   }
 
-  downloadInvoice(invoice: any) {
-    alert('Función de descarga en desarrollo');
+  downloadInvoice(invoice: Invoice) {
+    // Placeholder para descarga de PDF
+    console.log('Descargando factura:', invoice.id);
+    this.errorMessage.set('Función de descarga en desarrollo');
+    setTimeout(() => this.clearMessages(), 3000);
   }
 
-  deleteInvoice(invoice: any) {
-    if (confirm(`¿Estás seguro de que quieres eliminar la factura #${invoice.id.substring(0, 8)}?`)) {
-      this.adminService.deleteInvoice(invoice.id).subscribe({
-        next: (response) => {
-          this.successMessage = 'Factura eliminada exitosamente';
-          this.loadInvoices();
-        },
-        error: (error) => {
-          this.errorMessage = 'Error al eliminar la factura';
-        }
-      });
+  deleteInvoice(invoice: Invoice) {
+    const confirmMessage = `¿Estás seguro de que quieres eliminar la factura #${invoice.id.substring(0, 8)}?\n\nCliente: ${invoice.userInfo?.username}\nTotal: $${invoice.total.toFixed(2)}\n\nEsta acción no se puede deshacer.`;
+    
+    if (!confirm(confirmMessage)) {
+      return;
     }
+
+    console.log('Eliminando factura:', invoice.id); // Debug
+    this.deleting.set(true);
+    this.clearMessages();
+
+    this.adminService.deleteInvoice(invoice.id).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        console.log('Factura eliminada exitosamente:', response); // Debug
+        this.successMessage.set(`Factura #${invoice.id.substring(0, 8)} eliminada exitosamente`);
+        this.deleting.set(false);
+        
+        // Recargar facturas
+        this.loadInvoices();
+        
+        // Limpiar mensaje después de 5 segundos
+        setTimeout(() => this.clearMessages(), 5000);
+      },
+      error: (error) => {
+        console.error('Error deleting invoice:', error);
+        this.errorMessage.set('Error al eliminar la factura. Intenta nuevamente.');
+        this.deleting.set(false);
+        this.cdr.markForCheck();
+        
+        // Limpiar mensaje después de 5 segundos
+        setTimeout(() => this.clearMessages(), 5000);
+      }
+    });
   }
 
-  getTotalSales(): number {
-    return this.invoices.reduce((sum, invoice) => sum + invoice.total, 0);
+  private clearMessages() {
+    this.successMessage.set('');
+    this.errorMessage.set('');
   }
 
-  getTotalItems(): number {
-    return this.invoices.reduce((sum, invoice) => 
-      sum + invoice.items.reduce((itemSum: any, item: { quantity: any; }) => itemSum + item.quantity, 0), 0
-    );
-  }
-
-  getAverageSale(): number {
-    return this.invoices.length > 0 ? this.getTotalSales() / this.invoices.length : 0;
-  }
+  trackByInvoiceId = (index: number, invoice: Invoice): string => invoice.id;
+  trackByItemId = (index: number, item: InvoiceItem): string => `${item.productId}-${index}`;
 
   goBack() {
     this.router.navigate(['/dashboard']);

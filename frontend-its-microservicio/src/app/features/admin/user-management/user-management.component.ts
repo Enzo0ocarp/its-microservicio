@@ -1,8 +1,18 @@
 // src/app/features/admin/user-management/user-management.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { AdminService } from '../../../core/services/admin.service';
+
+interface User {
+  id: string;
+  username: string;
+  email: string;
+  fullName?: string;
+  createdAt: string;
+}
 
 @Component({
   selector: 'app-user-management',
@@ -32,11 +42,11 @@ import { AdminService } from '../../../core/services/admin.service';
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Success/Error Messages -->
-        <div *ngIf="successMessage" class="mb-6 p-4 bg-green-100 border border-green-400 rounded-lg text-green-700">
-          {{ successMessage }}
+        <div *ngIf="successMessage()" class="mb-6 p-4 bg-green-100 border border-green-400 rounded-lg text-green-700">
+          {{ successMessage() }}
         </div>
-        <div *ngIf="errorMessage" class="mb-6 p-4 bg-red-100 border border-red-400 rounded-lg text-red-700">
-          {{ errorMessage }}
+        <div *ngIf="errorMessage()" class="mb-6 p-4 bg-red-100 border border-red-400 rounded-lg text-red-700">
+          {{ errorMessage() }}
         </div>
 
         <!-- Users List -->
@@ -45,24 +55,24 @@ import { AdminService } from '../../../core/services/admin.service';
             <div class="flex justify-between items-center">
               <h2 class="text-lg font-semibold text-gray-900">Lista de Usuarios</h2>
               <div class="text-sm text-gray-600">
-                {{ users.length }} usuario(s) registrado(s)
+                {{ users().length }} usuario(s) registrado(s)
               </div>
             </div>
           </div>
           
-          <div *ngIf="loading" class="p-12 text-center">
+          <div *ngIf="loading()" class="p-12 text-center">
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <p class="mt-2 text-gray-600">Cargando usuarios...</p>
           </div>
 
-          <div *ngIf="!loading && users.length === 0" class="p-12 text-center">
+          <div *ngIf="!loading() && users().length === 0" class="p-12 text-center">
             <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
             </svg>
             <p class="text-gray-600">No hay usuarios registrados</p>
           </div>
 
-          <div *ngIf="!loading && users.length > 0" class="overflow-x-auto">
+          <div *ngIf="!loading() && users().length > 0" class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
@@ -87,7 +97,7 @@ import { AdminService } from '../../../core/services/admin.service';
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <tr *ngFor="let user of users" class="hover:bg-gray-50">
+                <tr *ngFor="let user of users(); trackBy: trackByUserId" class="hover:bg-gray-50">
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
                       <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3">
@@ -142,7 +152,8 @@ import { AdminService } from '../../../core/services/admin.service';
                       <button
                         *ngIf="user.username !== 'admin'"
                         (click)="deleteUser(user)"
-                        class="text-red-600 hover:text-red-900 p-1"
+                        [disabled]="deleting()"
+                        class="text-red-600 hover:text-red-900 p-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Eliminar"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +169,7 @@ import { AdminService } from '../../../core/services/admin.service';
         </div>
 
         <!-- User Stats Cards -->
-        <div *ngIf="!loading && users.length > 0" class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div *ngIf="!loading() && users().length > 0" class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div class="flex items-center">
               <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
@@ -168,7 +179,7 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Total Usuarios</p>
-                <p class="text-2xl font-bold text-gray-900">{{ users.length }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ users().length }}</p>
               </div>
             </div>
           </div>
@@ -182,7 +193,7 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Usuarios Activos</p>
-                <p class="text-2xl font-bold text-gray-900">{{ users.length }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ users().length }}</p>
               </div>
             </div>
           </div>
@@ -196,7 +207,7 @@ import { AdminService } from '../../../core/services/admin.service';
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-600">Administradores</p>
-                <p class="text-2xl font-bold text-gray-900">{{ getAdminCount() }}</p>
+                <p class="text-2xl font-bold text-gray-900">{{ adminCount() }}</p>
               </div>
             </div>
           </div>
@@ -205,60 +216,128 @@ import { AdminService } from '../../../core/services/admin.service';
     </div>
   `
 })
-export class UserManagementComponent implements OnInit {
-  users: any[] = [];
-  loading = true;
-  successMessage = '';
-  errorMessage = '';
+export class UserManagementComponent implements OnInit, OnDestroy {
+  // Signals
+  users = signal<User[]>([]);
+  loading = signal(true);
+  deleting = signal(false);
+  successMessage = signal('');
+  errorMessage = signal('');
+
+  // Computed
+  adminCount = computed(() => {
+    return this.users().filter(user => user.username === 'admin').length;
+  });
+
+  private destroy$ = new Subject<void>();
 
   constructor(
     private adminService: AdminService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
+    console.log('Iniciando User Management...'); // Debug
     this.loadUsers();
   }
 
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
   loadUsers() {
-    this.loading = true;
-    this.adminService.getAllUsers().subscribe({
+    console.log('Cargando usuarios...'); // Debug
+    this.loading.set(true);
+    this.clearMessages();
+    
+    this.adminService.getAllUsers().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
       next: (users) => {
-        this.users = users;
-        this.loading = false;
+        console.log('Usuarios cargados:', users); // Debug
+        this.users.set(users);
+        this.loading.set(false);
+        this.cdr.markForCheck();
       },
       error: (error) => {
         console.error('Error loading users:', error);
-        this.errorMessage = 'Error al cargar los usuarios';
-        this.loading = false;
+        this.errorMessage.set('Error al cargar los usuarios');
+        this.loading.set(false);
+        this.cdr.markForCheck();
       }
     });
   }
 
-  viewUserDetails(user: any) {
-    alert(`Detalles del usuario:\n\nUsername: ${user.username}\nEmail: ${user.email}\nRegistro: ${new Date(user.createdAt).toLocaleDateString()}`);
+  viewUserDetails(user: User) {
+    const details = `
+Detalles del usuario:
+
+Username: ${user.username}
+Email: ${user.email}
+Nombre: ${user.fullName || 'No especificado'}
+Registro: ${new Date(user.createdAt).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}
+ID: ${user.id}
+    `.trim();
+    
+    alert(details);
   }
 
-  editUser(user: any) {
+  editUser(user: User) {
     // Placeholder para funcionalidad de edición
-    alert('Función de edición en desarrollo');
+    this.errorMessage.set('Función de edición en desarrollo');
+    setTimeout(() => this.clearMessages(), 3000);
   }
 
-  deleteUser(user: any) {
-    if (confirm(`¿Estás seguro de que quieres eliminar al usuario "${user.username}"?`)) {
-      this.adminService.deleteUser(user.id).subscribe({
-        next: (response) => {
-          this.successMessage = 'Usuario eliminado exitosamente';
-          this.loadUsers();
-        },
-        error: (error) => {
-          this.errorMessage = 'Error al eliminar el usuario';
-        }
-      });
+  deleteUser(user: User) {
+    if (!confirm(`¿Estás seguro de que quieres eliminar al usuario "${user.username}"?\n\nEsta acción no se puede deshacer.`)) {
+      return;
     }
+
+    console.log('Eliminando usuario:', user.username); // Debug
+    this.deleting.set(true);
+    this.clearMessages();
+
+    this.adminService.deleteUser(user.id).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        console.log('Usuario eliminado exitosamente:', response); // Debug
+        this.successMessage.set(`Usuario "${user.username}" eliminado exitosamente`);
+        this.deleting.set(false);
+        
+        // Recargar la lista de usuarios
+        this.loadUsers();
+        
+        // Limpiar mensaje después de 5 segundos
+        setTimeout(() => this.clearMessages(), 5000);
+      },
+      error: (error) => {
+        console.error('Error deleting user:', error);
+        this.errorMessage.set('Error al eliminar el usuario. Intenta nuevamente.');
+        this.deleting.set(false);
+        this.cdr.markForCheck();
+        
+        // Limpiar mensaje después de 5 segundos
+        setTimeout(() => this.clearMessages(), 5000);
+      }
+    });
+  }
+
+  private clearMessages() {
+    this.successMessage.set('');
+    this.errorMessage.set('');
   }
 
   getUserInitials(username: string): string {
+    if (!username) return 'XX';
     return username.substring(0, 2).toUpperCase();
   }
 
@@ -272,9 +351,7 @@ export class UserManagementComponent implements OnInit {
     return username === 'admin' ? 'Administrador' : 'Usuario';
   }
 
-  getAdminCount(): number {
-    return this.users.filter(user => user.username === 'admin').length;
-  }
+  trackByUserId = (index: number, user: User): string => user.id;
 
   goBack() {
     this.router.navigate(['/dashboard']);

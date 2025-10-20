@@ -8,19 +8,22 @@ import { envs } from './config/envs';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Configuración CORS - AGREGADO PARA SOLUCIONAR EL PROBLEMA
+  // CORS - ACTUALIZADO COMPLETAMENTE
   app.enableCors({
-    origin: [
-      'http://localhost:3000',    // React dev server
-      'http://localhost:5173',    // Vite dev server
-      'http://localhost:4200',    // Angular dev server
-      'http://127.0.0.1:5500',    // Live Server
-      'http://localhost:8080',    // Otro puerto común
-      // Agrega aquí la URL de tu frontend en producción
-    ],
+    origin: true, // ⚠️ ESTO PERMITE TODOS LOS ORÍGENES EN DESARROLLO
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires'],
     credentials: true,
+    exposedHeaders: ['Content-Length', 'Content-Type'],
+    maxAge: 3600,
+  });
+
+  // Middleware para deshabilitar caché
+  app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
   });
   
   // Validación global de DTOs
@@ -68,7 +71,7 @@ async function bootstrap() {
         description: 'Ingresa el JWT token',
         in: 'header',
       },
-      'JWT-auth' // Este nombre se usa en los controladores
+      'JWT-auth'
     )
     .addTag('Auth', 'Endpoints de autenticación y registro')
     .addTag('Products', 'Gestión del catálogo de productos')
@@ -82,7 +85,6 @@ async function bootstrap() {
     operationIdFactory: (controllerKey: string, methodKey: string) => methodKey,
   });
 
-  // Configurar la ruta de Swagger UI
   SwaggerModule.setup('api/docs', app, document, {
     customSiteTitle: 'ITS API Documentation',
     customfavIcon: 'https://nestjs.com/img/logo_text.svg',
@@ -102,9 +104,10 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(envs.port, '0.0.0.0'); // Agregado '0.0.0.0' para escuchar en todas las interfaces
+  await app.listen(envs.port, '0.0.0.0');
   console.log(`🚀 Gateway listening on port ${envs.port}`);
   console.log(`📚 Swagger documentation available at http://localhost:${envs.port}/api/docs`);
-  console.log(`📡 CORS enabled for development origins`);
+  console.log(`📡 CORS enabled for ALL origins (development mode)`);
+  console.log(`🚫 Cache disabled for all responses`);
 }
 bootstrap();
